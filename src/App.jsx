@@ -277,13 +277,24 @@ Generate all ${customNumber} lists now.`;
       doc.setFont("helvetica", "bold");
       
       for (let r = 0; r < puzzle.grid.length; r++) {
-        for (let c = 0; c < puzzle.grid[r].length; c++) {
-          const x = startX + c * cellSize;
-          const y = startY + r * cellSize;
-          doc.rect(x, y, cellSize, cellSize);
-          doc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + 0.05, { align: "center", baseline: "middle" });
-        }
-      }
+  for (let c = 0; c < puzzle.grid[r].length; c++) {
+    const x = startX + c * cellSize;
+    const y = startY + r * cellSize;
+    
+    // Disegna sfondo bianco
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x, y, cellSize, cellSize, "F");
+    
+    // Disegna bordo nero
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.01);
+    doc.rect(x, y, cellSize, cellSize, "S");
+    
+    // Scrivi lettera
+    doc.setTextColor(0, 0, 0);
+    doc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + 0.05, { align: "center", baseline: "middle" });
+  }
+}
 
       // Word list
       const wordListY = startY + gridWidth + 0.2;
@@ -314,34 +325,32 @@ Generate all ${customNumber} lists now.`;
       doc.setFont("helvetica", "bold");
 
       for (let r = 0; r < puzzle.grid.length; r++) {
-        for (let c = 0; c < puzzle.grid[r].length; c++) {
-          const x = startX + c * cellSize;
-          const y = startY + r * cellSize;
-          
-          const isFound = puzzle.wordPositions.some(wp =>
-            wp.positions.some(pos => pos.row === r && pos.col === c)
-          );
+  for (let c = 0; c < puzzle.grid[r].length; c++) {
+    const x = startX + c * cellSize;
+    const y = startY + r * cellSize;
+    
+    const isFound = puzzle.wordPositions.some(wp =>
+      wp.positions.some(pos => pos.row === r && pos.col === c)
+    );
 
-          // Disegna il rettangolo bianco di fondo
-doc.setFillColor(255, 255, 255);
-doc.rect(x, y, cellSize, cellSize, "F");
-
-// Se trovato, evidenzia in giallo
-if (isFound) {
-  doc.setFillColor(255, 255, 0);
-  doc.rect(x, y, cellSize, cellSize, "F");
+    // Disegna sfondo (bianco o giallo)
+    if (isFound) {
+      doc.setFillColor(255, 255, 0); // Giallo
+    } else {
+      doc.setFillColor(255, 255, 255); // Bianco
+    }
+    doc.rect(x, y, cellSize, cellSize, "F");
+    
+    // Disegna bordo nero
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.01);
+    doc.rect(x, y, cellSize, cellSize, "S");
+    
+    // Scrivi lettera
+    doc.setTextColor(0, 0, 0);
+    doc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + 0.05, { align: "center", baseline: "middle" });
+  }
 }
-
-// Disegna il bordo nero
-doc.setDrawColor(0, 0, 0);
-doc.setLineWidth(0.5);
-doc.rect(x, y, cellSize, cellSize);
-          }
-
-          doc.rect(x, y, cellSize, cellSize);
-          doc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + 0.05, { align: "center", baseline: "middle" });
-        }
-      }
 
       // Word list - no styling
       doc.setFontSize(11);
