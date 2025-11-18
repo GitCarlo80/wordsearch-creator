@@ -322,9 +322,20 @@ Generate all ${customNumber} lists now.`;
             wp.positions.some(pos => pos.row === r && pos.col === c)
           );
 
-          if (isFound) {
-            doc.setFillColor(255, 255, 0);
-            doc.rect(x, y, cellSize, cellSize, "F");
+          // Disegna il rettangolo bianco di fondo
+doc.setFillColor(255, 255, 255);
+doc.rect(x, y, cellSize, cellSize, "F");
+
+// Se trovato, evidenzia in giallo
+if (isFound) {
+  doc.setFillColor(255, 255, 0);
+  doc.rect(x, y, cellSize, cellSize, "F");
+}
+
+// Disegna il bordo nero
+doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.5);
+doc.rect(x, y, cellSize, cellSize);
           }
 
           doc.rect(x, y, cellSize, cellSize);
