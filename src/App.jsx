@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -11,6 +11,26 @@ const WordSearchCreator = () => {
   const [enableDecorations, setEnableDecorations] = useState(true);
   const [generatedPuzzles, setGeneratedPuzzles] = useState([]);
   const [currentTab, setCurrentTab] = useState('upload');
+    const [dictionary, setDictionary] = useState([]);
+    const [dictionaryStatus, setDictionaryStatus] = useState('Caricamento...');
+
+    // Carica il dizionario all'avvio
+    useEffect(() => {
+          const loadDictionary = async () => {
+                  try {
+                            const response = await fetch('/dictionary.txt');
+                            const text = await response.text();
+                            const words = text.split('\n').map(w => w.trim()).filter(w => w.length > 0);
+                            setDictionary(words);
+                            setDictionaryStatus(`✓ Dizionario caricato (${words.length} parole)`);
+                          } catch (error) {
+                            console.error('Errore caricamento dizionario:', error);
+                            setDictionaryStatus('❌ Errore caricamento dizionario');
+                          }
+                };
+
+          loadDictionary();
+        }, []);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
