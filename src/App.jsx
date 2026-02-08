@@ -119,42 +119,166 @@ const WordSearchCreator = () => {
   };
 
   const downloadPDFs = async () => {
-    const puzzlesZip = new JSZip();
-    const solutionsZip = new JSZip();
-    for (let puzzleIdx = 0; puzzleIdx < generatedPuzzles.length; puzzleIdx++) {
-      const puzzle = generatedPuzzles[puzzleIdx];
-      let pageWidth, pageHeight;
-      if (pageFormat === '6x9') { pageWidth = 152.4; pageHeight = 228.6; }
-      else if (pageFormat === 'A4') { pageWidth = 210; pageHeight = 297; }
-      else if (pageFormat === 'US Letter') { pageWidth = 215.9; pageHeight = 279.4; }
-      const puzzleDoc = new jsPDF({ orientation: pageWidth > pageHeight ? 'l' : 'p', unit: 'mm', format: [pageWidth, pageHeight] });
-      const margin = 8;
-      const puzzleGridSize = puzzle.grid.length;
-      const availableWidth = pageWidth - 2 * margin;
-      const gridWidth = availableWidth * 0.55;
-      const wordsWidth = availableWidth * 0.40;
-      const titleHeight = 12;
-      const availableHeight = pageHeight - 2 * margin - titleHeight;
-      const cellSize = Math.min(gridWidth / puzzleGridSize, availableHeight / puzzleGridSize);
-      puzzleDoc.setFontSize(14);
-      puzzleDoc.setFont(undefined, 'bold');
-      puzzleDoc.text(puzzle.theme || 'Word Search', pageWidth / 2, margin + 6, { align: 'center' });
-      const gridStartX = margin + wordsWidth + 5;
-      const gridStartY = margin + titleHeight;
-      puzzleDoc.setFontSize(8);
-      for (let r = 0; r < puzzle.grid.length; r++) {
-        for (let c = 0; c < puzzle.grid[r].length; c++) {
-          const x = gridStartX + c * cellSize;
-          const y = gridStartY + r * cellSize;
-          puzzleDoc.setFillColor(255, 255, 255);
-          puzzleDoc.rect(x, y, cellSize, cellSize, "F");
-          puzzleDoc.setDrawColor(0, 0, 0);
-          puzzleDoc.setLineWidth(0.1);
-          puzzleDoc.rect(x, y, cellSize, cellSize, "S");
-          const fontSize = Math.max(5, Math.min(8, cellSize * 0.5));
-          puzzleDoc.setFontSize(fontSize);
-          puzzleDoc.setTextColor(0, 0, 0);
-          puzzleDoc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + fontSize * 0.1, { align: "center", baseline: "middle" });
+  if (generatedPuzzles.length === 0) {
+    alert('Nessun puzzle generato! Carica prima un file.');
+    return;
+  }
+
+  // Crea un unico ZIP con due cartelle
+  const allFilesZip = new JSZip();
+  const puzzlesFolder = allFilesZip.folder('puzzles');
+  const solutionsFolder = allFilesZip.folder('solutions');
+
+  // Itera su tutti i puzzle generati
+  for (let puzzleIdx = 0; puzzleIdx < generatedPuzzles.length; puzzleIdx++) {
+    const puzzle = generatedPuzzles[puzzleIdx];
+
+    // Determina dimensioni pagina
+    let pageWidth, pageHeight;
+    if (pageFormat === '6x9') {
+      pageWidth = 152.4;
+      pageHeight = 228.6;
+    } else if (pageFormat === 'A4') {
+      pageWidth = 210;
+      pageHeight = 297;
+    } else if (pageFormat === 'US Letter') {
+      pageWidth = 215.9;
+      pageHeight = 279.4;
+    }
+
+    // === CREA PDF PUZZLE ===
+    const puzzleDoc = new jsPDF({
+      orientation: pageWidth > pageHeight ? 'l' : 'p',
+      unit: 'mm',
+      format: [pageWidth, pageHeight]
+    });
+
+    const margin = 8;
+    const puzzleGridSize = puzzle.grid.length;
+    const availableWidth = pageWidth - 2 * margin;
+    const gridWidth = availableWidth * 0.55;
+    const wordsWidth = availableWidth * 0.40;
+    const titleHeight = 12;
+    const availableHeight = pageHeight - 2 * margin - titleHeight;
+    const cellSize = Math.min(gridWidth / puzzleGridSize, availableHeight / puzzleGridSize);
+
+    // Titolo
+    puzzleDoc.setFontSize(14);
+    puzzleDoc.setFont(undefined, 'bold');
+    puzzleDoc.text(puzzle.theme || 'Word Search', pageWidth / 2, margin + 6, { align: 'center' });
+
+    // Disegna griglia puzzle
+    const gridStartX = margin + wordsWidth + 5;
+    const gridStartY = margin + titleHeight;
+
+    puzzleDoc.setFontSize(8);
+    for (let r = 0; r < puzzle.grid.length; r++) {
+      for (let c = 0; c < puzzle.grid[r].length; c++) {
+        const x = gridStartX + c * cellSize;
+        const y = gridStartY + r * cellSize;
+
+        puzzleDoc.setFillColor(255, 255, 255);
+        puzzleDoc.rect(x, y, cellSize, cellSize, "F");
+        puzzleDoc.setDrawColor(0, 0, 0);
+        puzzleDoc.setLineWidth(0.1);
+        puzzleDoc.rect(x, y, cellSize, cellSize, "S");
+
+        const fontSize = Math.max(5, Math.min(8, cellSize * 0.5));
+        puzzleDoc.setFontSize(fontSize);
+        puzzleDoc.setTextColor(0, 0, 0);
+        puzzleDoc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + fontSize * 0.1, {
+          align: "center",
+          baseline: "middle"
+        });
+      }
+    }
+
+    // Lista parole
+    const wordsStartX = margin;
+    const wordsStartY = gridStartY + 5;
+    puzzleDoc.setFontSize(9);
+    puzzleDoc.setFont(undefined, 'bold');
+    puzzleDoc.text('Find these words:', wordsStartX, wordsStartY - 2);
+    puzzleDoc.setFont(undefined, 'normal');
+    puzzleDoc.setFontSize(7);
+
+    const numColumns = 2;
+    const colWidth = wordsWidth / numColumns;
+    const lineHeight = 4;
+    const wordsPerColumn = Math.ceil(puzzle.words.length / numColumns);
+    let wordIdx = 0;
+
+    for (let col = 0; col < numColumns; col++) {
+      for (let row = 0; row < wordsPerColumn; row++) {
+        if (wordIdx < puzzle.words.length) {
+          const x = wordsStartX + col * colWidth;
+          const y = wordsStartY + row * lineHeight;
+          puzzleDoc.text(`• ${puzzle.words[wordIdx]}`, x, y);
+          wordIdx++;
+        }
+      }
+    }
+
+    // === CREA PDF SOLUZIONE ===
+    const solutionDoc = new jsPDF({
+      orientation: pageWidth > pageHeight ? 'l' : 'p',
+      unit: 'mm',
+      format: [pageWidth, pageHeight]
+    });
+
+    // Titolo soluzione
+    solutionDoc.setFontSize(14);
+    solutionDoc.setFont(undefined, 'bold');
+    solutionDoc.text(`${puzzle.theme || 'Word Search'} - Solution`, pageWidth / 2, margin + 6, { align: 'center' });
+
+    // Disegna griglia soluzione
+    for (let r = 0; r < puzzle.grid.length; r++) {
+      for (let c = 0; c < puzzle.grid[r].length; c++) {
+        const x = gridStartX + c * cellSize;
+        const y = gridStartY + r * cellSize;
+
+        const isFound = puzzle.wordPositions.some(wp =>
+          wp.positions.some(pos => pos.row === r && pos.col === c)
+        );
+
+        if (isFound) {
+          solutionDoc.setFillColor(255, 255, 100);
+        } else {
+          solutionDoc.setFillColor(255, 255, 255);
+        }
+        solutionDoc.rect(x, y, cellSize, cellSize, "F");
+        solutionDoc.setDrawColor(0, 0, 0);
+        solutionDoc.setLineWidth(0.1);
+        solutionDoc.rect(x, y, cellSize, cellSize, "S");
+
+        const fontSize = Math.max(5, Math.min(8, cellSize * 0.5));
+        solutionDoc.setFontSize(fontSize);
+        solutionDoc.setTextColor(0, 0, 0);
+        solutionDoc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + fontSize * 0.1, {
+          align: "center",
+          baseline: "middle"
+        });
+      }
+    }
+
+    // Converti in blob e aggiungi agli ZIP
+    const puzzleBlob = puzzleDoc.output('blob');
+    const solutionBlob = solutionDoc.output('blob');
+
+    puzzlesFolder.file(`puzzle-${puzzleIdx + 1}-${puzzle.theme || 'wordsearch'}.pdf`, puzzleBlob);
+    solutionsFolder.file(`solution-${puzzleIdx + 1}-${puzzle.theme || 'wordsearch'}.pdf`, solutionBlob);
+  }
+
+  // Genera e scarica il file ZIP finale
+  const finalZipBlob = await allFilesZip.generateAsync({ type: 'blob' });
+
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(finalZipBlob);
+  link.download = `word-search-complete-${Date.now()}.zip`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+
         }
       }
       const wordsStartX = margin;
