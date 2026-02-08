@@ -354,8 +354,7 @@ const WordSearchCreator = () => {
       titleS.textContent = `${puzzle.theme || 'Word Search'} - Solution`;
       titleS.style.textAlign = 'center';
       solutionDiv.appendChild(titleS);
-      const gridDivSol = createGridDiv(puzzle.grid, puzzle.wordPosit
-ions);
+    const gridDivSol = createGridDiv(puzzle.grid, puzzle.wordPositions);
       solutionDiv.appendChild(gridDivSol);
       document.body.appendChild(solutionDiv);
       const canvasSol = await html2canvas(solutionDiv);
