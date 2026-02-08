@@ -278,9 +278,6 @@ const WordSearchCreator = () => {
   link.click();
   URL.revokeObjectURL(link.href);
 };
-
-        }
-      }
       const wordsStartX = margin;
       const wordsStartY = gridStartY + 5;
       puzzleDoc.setFontSize(9);
@@ -324,26 +321,6 @@ const WordSearchCreator = () => {
           solutionDoc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + fontSize * 0.1, { align: "center", baseline: "middle" });
         }
       }
-      const puzzleBlob = puzzleDoc.output('blob');
-      const solutionBlob = solutionDoc.output('blob');
-      puzzlesZip.file(`puzzle-${puzzleIdx + 1}-${puzzle.theme || 'wordsearch'}.pdf`, puzzleBlob);
-      solutionsZip.file(`solution-${puzzleIdx + 1}-${puzzle.theme || 'wordsearch'}.pdf`, solutionBlob);
-    }
-    const puzzlesZipBlob = await puzzlesZip.generateAsync({ type: 'blob' });
-    const puzzlesLink = document.createElement('a');
-    puzzlesLink.href = URL.createObjectURL(puzzlesZipBlob);
-    puzzlesLink.download = `word-search-puzzles-${Date.now()}.zip`;
-    puzzlesLink.click();
-    URL.revokeObjectURL(puzzlesLink.href);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const solutionsZipBlob = await solutionsZip.generateAsync({ type: 'blob' });
-    const solutionsLink = document.createElement('a');
-    solutionsLink.href = URL.createObjectURL(solutionsZipBlob);
-    solutionsLink.download = `word-search-solutions-${Date.now()}.zip`;
-    solutionsLink.click();
-    URL.revokeObjectURL(solutionsLink.href);
-  };
-
   const downloadPNGs = async () => {
     for (let puzzleIdx = 0; puzzleIdx < generatedPuzzles.length; puzzleIdx++) {
       const puzzle = generatedPuzzles[puzzleIdx];
