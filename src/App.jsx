@@ -5,8 +5,9 @@ import html2canvas from 'html2canvas';
 
 const WordSearchCreator = () => {
   const [words, setWords] = useState([]);
-  const [gridSize, setGridSize] = useState(15);
+  const [gridSize, setGridSize] = useState(20);
   const [pageFormat, setPageFormat] = useState('6x9');
+  const [puzzlesPerPage, setPuzzlesPerPage] = useState(1);
   const [enableDecorations, setEnableDecorations] = useState(true);
   const [generatedPuzzles, setGeneratedPuzzles] = useState([]);
   const [currentTab, setCurrentTab] = useState('upload');
@@ -14,54 +15,67 @@ const WordSearchCreator = () => {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     let uploadedWords = [];
-
     if (file.name.endsWith('.txt')) {
       const text = await file.text();
-      uploadedWords = text.split('\n').map(w => w.trim()).filter(w => w && w.length > 0);
+      uploadedWords = parseWordLists(text);
     } else if (file.name.endsWith('.zip')) {
       const zip = new JSZip();
       const unzipped = await zip.loadAsync(file);
       for (const filename in unzipped.files) {
         if (filename.endsWith('.txt')) {
           const text = await unzipped.files[filename].async('text');
-          uploadedWords = uploadedWords.concat(text.split('\n').map(w => w.trim()).filter(w => w && w.length > 0));
+          const lists = parseWordLists(text);
+          uploadedWords = uploadedWords.concat(lists);
         }
       }
     }
-
     if (uploadedWords.length > 0) {
       setWords(uploadedWords);
       generatePuzzles(uploadedWords);
     }
   };
 
-  const generatePuzzles = (wordList) => {
+  const parseWordLists = (text) => {
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    const lists = [];
+    let currentList = null;
+    for (const line of lines) {
+      if (line.includes('(') && line.includes(')')) {
+        if (currentList && currentList.words.length > 0) {
+          lists.push(currentList);
+        }
+        const themeMatch = line.match(/\((.*?)\)/);
+        const theme = themeMatch ? themeMatch[1] : line;
+        currentList = { theme, words: [] };
+      } else if (currentList && line.length > 0) {
+        currentList.words.push(line);
+      }
+    }
+    if (currentList && currentList.words.length > 0) {
+      lists.push(currentList);
+    }
+    return lists;
+  };
+
+  const generatePuzzles = (wordLists) => {
     const puzzles = [];
-    const wordsPerPuzzle = 15;
-    
-    for (let i = 0; i < wordList.length; i += wordsPerPuzzle) {
-      const puzzleWords = wordList.slice(i, i + wordsPerPuzzle);
-      const grid = createGrid(puzzleWords, gridSize);
+    for (const list of wordLists) {
+      const grid = createGrid(list.words, gridSize);
       puzzles.push({
-        words: puzzleWords,
+        theme: list.theme,
+        words: list.words,
         grid: grid.grid,
         wordPositions: grid.wordPositions
       });
     }
-    
     setGeneratedPuzzles(puzzles);
   };
 
   const createGrid = (wordList, size) => {
     const grid = Array(size).fill(null).map(() => Array(size).fill(''));
     const wordPositions = [];
-    const directions = [
-      [0, 1], [0, -1], [1, 0], [-1, 0],
-      [1, 1], [-1, -1], [1, -1], [-1, 1]
-    ];
-
+    const directions = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]];
     wordList.forEach(word => {
       let placed = false;
       let attempts = 0;
@@ -69,7 +83,6 @@ const WordSearchCreator = () => {
         const dir = directions[Math.floor(Math.random() * directions.length)];
         const row = Math.floor(Math.random() * size);
         const col = Math.floor(Math.random() * size);
-        
         if (canPlace(grid, word, row, col, dir[0], dir[1], size)) {
           const positions = [];
           for (let i = 0; i < word.length; i++) {
@@ -84,7 +97,6 @@ const WordSearchCreator = () => {
         attempts++;
       }
     });
-
     for (let i = 0; i < size; i++) {
       for (let j = 0; j < size; j++) {
         if (grid[i][j] === '') {
@@ -92,14 +104,12 @@ const WordSearchCreator = () => {
         }
       }
     }
-
     return { grid, wordPositions };
   };
 
   const canPlace = (grid, word, row, col, rowDir, colDir, size) => {
     if (row + (word.length - 1) * rowDir < 0 || row + (word.length - 1) * rowDir >= size) return false;
     if (col + (word.length - 1) * colDir < 0 || col + (word.length - 1) * colDir >= size) return false;
-
     for (let i = 0; i < word.length; i++) {
       const r = row + i * rowDir;
       const c = col + i * colDir;
@@ -109,136 +119,120 @@ const WordSearchCreator = () => {
   };
 
   const downloadPDFs = async () => {
+    const puzzlesZip = new JSZip();
+    const solutionsZip = new JSZip();
     for (let puzzleIdx = 0; puzzleIdx < generatedPuzzles.length; puzzleIdx++) {
       const puzzle = generatedPuzzles[puzzleIdx];
-      
-      // Get page dimensions based on format
       let pageWidth, pageHeight;
-      if (pageFormat === '6x9') {
-        pageWidth = 152.4; // 6 inches in mm
-        pageHeight = 228.6; // 9 inches in mm
-      } else if (pageFormat === 'A4') {
-        pageWidth = 210;
-        pageHeight = 297;
-      } else if (pageFormat === 'US Letter') {
-        pageWidth = 215.9;
-        pageHeight = 279.4;
-      }
-
-      const doc = new jsPDF({
-        orientation: pageWidth > pageHeight ? 'l' : 'p',
-        unit: 'mm',
-        format: [pageWidth, pageHeight]
-      });
-
-      // Page 1: Puzzle
-      const margin = 10;
-      const gridWidth = pageWidth - 2 * margin;
-      const gridHeight = (pageHeight - 40) / 2;
-      const cellSize = gridWidth / gridSize;
-      const startX = margin;
-      const startY = margin + 10;
-
-      doc.setFontSize(16);
-      doc.text('Word Search Puzzle', pageWidth / 2, margin + 5, { align: 'center' });
-
-      doc.setFontSize(10);
-
-      // Draw grid - PUZZLE PAGE (FIXED)
+      if (pageFormat === '6x9') { pageWidth = 152.4; pageHeight = 228.6; }
+      else if (pageFormat === 'A4') { pageWidth = 210; pageHeight = 297; }
+      else if (pageFormat === 'US Letter') { pageWidth = 215.9; pageHeight = 279.4; }
+      const puzzleDoc = new jsPDF({ orientation: pageWidth > pageHeight ? 'l' : 'p', unit: 'mm', format: [pageWidth, pageHeight] });
+      const margin = 8;
+      const puzzleGridSize = puzzle.grid.length;
+      const availableWidth = pageWidth - 2 * margin;
+      const gridWidth = availableWidth * 0.55;
+      const wordsWidth = availableWidth * 0.40;
+      const titleHeight = 12;
+      const availableHeight = pageHeight - 2 * margin - titleHeight;
+      const cellSize = Math.min(gridWidth / puzzleGridSize, availableHeight / puzzleGridSize);
+      puzzleDoc.setFontSize(14);
+      puzzleDoc.setFont(undefined, 'bold');
+      puzzleDoc.text(puzzle.theme || 'Word Search', pageWidth / 2, margin + 6, { align: 'center' });
+      const gridStartX = margin + wordsWidth + 5;
+      const gridStartY = margin + titleHeight;
+      puzzleDoc.setFontSize(8);
       for (let r = 0; r < puzzle.grid.length; r++) {
         for (let c = 0; c < puzzle.grid[r].length; c++) {
-          const x = startX + c * cellSize;
-          const y = startY + r * cellSize;
-          
-          // Disegna sfondo bianco
-          doc.setFillColor(255, 255, 255);
-          doc.rect(x, y, cellSize, cellSize, "F");
-          
-          // Disegna bordo nero
-          doc.setDrawColor(0, 0, 0);
-          doc.setLineWidth(0.01);
-          doc.rect(x, y, cellSize, cellSize, "S");
-          
-          // Scrivi lettera
-          doc.setTextColor(0, 0, 0);
-          doc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + 0.05, { align: "center", baseline: "middle" });
+          const x = gridStartX + c * cellSize;
+          const y = gridStartY + r * cellSize;
+          puzzleDoc.setFillColor(255, 255, 255);
+          puzzleDoc.rect(x, y, cellSize, cellSize, "F");
+          puzzleDoc.setDrawColor(0, 0, 0);
+          puzzleDoc.setLineWidth(0.1);
+          puzzleDoc.rect(x, y, cellSize, cellSize, "S");
+          const fontSize = Math.max(5, Math.min(8, cellSize * 0.5));
+          puzzleDoc.setFontSize(fontSize);
+          puzzleDoc.setTextColor(0, 0, 0);
+          puzzleDoc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + fontSize * 0.1, { align: "center", baseline: "middle" });
         }
       }
-
-      // Word list
-      const wordListX = margin;
-      const wordListY = startY + gridHeight + 5;
-      doc.setFontSize(10);
-      doc.text('Find these words:', wordListX, wordListY);
-      
-      const colWidth = gridWidth / 2;
+      const wordsStartX = margin;
+      const wordsStartY = gridStartY + 5;
+      puzzleDoc.setFontSize(9);
+      puzzleDoc.setFont(undefined, 'bold');
+      puzzleDoc.text('Find these words:', wordsStartX, wordsStartY - 2);
+      puzzleDoc.setFont(undefined, 'normal');
+      puzzleDoc.setFontSize(7);
+      const numColumns = 2;
+      const colWidth = wordsWidth / numColumns;
+      const lineHeight = 4;
+      const wordsPerColumn = Math.ceil(puzzle.words.length / numColumns);
       let wordIdx = 0;
-      for (let col = 0; col < 2; col++) {
-        for (let row = 0; row < Math.ceil(puzzle.words.length / 2); row++) {
+      for (let col = 0; col < numColumns; col++) {
+        for (let row = 0; row < wordsPerColumn; row++) {
           if (wordIdx < puzzle.words.length) {
-            doc.text(`• ${puzzle.words[wordIdx]}`, wordListX + col * colWidth, wordListY + 5 + row * 4);
+            const x = wordsStartX + col * colWidth;
+            const y = wordsStartY + row * lineHeight;
+            puzzleDoc.text(`• ${puzzle.words[wordIdx]}`, x, y);
             wordIdx++;
           }
         }
       }
-
-      // Page 2: Solution
-      doc.addPage([pageWidth, pageHeight], pageWidth > pageHeight ? 'l' : 'p');
-
-      doc.setFontSize(16);
-      doc.text('Word Search - Solution', pageWidth / 2, margin + 5, { align: 'center' });
-
-      // Draw solution grid (FIXED)
+      const solutionDoc = new jsPDF({ orientation: pageWidth > pageHeight ? 'l' : 'p', unit: 'mm', format: [pageWidth, pageHeight] });
+      solutionDoc.setFontSize(14);
+      solutionDoc.setFont(undefined, 'bold');
+      solutionDoc.text(`${puzzle.theme || 'Word Search'} - Solution`, pageWidth / 2, margin + 6, { align: 'center' });
       for (let r = 0; r < puzzle.grid.length; r++) {
         for (let c = 0; c < puzzle.grid[r].length; c++) {
-          const x = startX + c * cellSize;
-          const y = startY + r * cellSize;
-          
-          const isFound = puzzle.wordPositions.some(wp =>
-            wp.positions.some(pos => pos.row === r && pos.col === c)
-          );
-
-          // Disegna sfondo (bianco o giallo)
-          if (isFound) {
-            doc.setFillColor(255, 255, 0); // Giallo
-          } else {
-            doc.setFillColor(255, 255, 255); // Bianco
-          }
-          doc.rect(x, y, cellSize, cellSize, "F");
-          
-          // Disegna bordo nero
-          doc.setDrawColor(0, 0, 0);
-          doc.setLineWidth(0.01);
-          doc.rect(x, y, cellSize, cellSize, "S");
-          
-          // Scrivi lettera
-          doc.setTextColor(0, 0, 0);
-          doc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + 0.05, { align: "center", baseline: "middle" });
+          const x = gridStartX + c * cellSize;
+          const y = gridStartY + r * cellSize;
+          const isFound = puzzle.wordPositions.some(wp => wp.positions.some(pos => pos.row === r && pos.col === c));
+          if (isFound) { solutionDoc.setFillColor(255, 255, 100); }
+          else { solutionDoc.setFillColor(255, 255, 255); }
+          solutionDoc.rect(x, y, cellSize, cellSize, "F");
+          solutionDoc.setDrawColor(0, 0, 0);
+          solutionDoc.setLineWidth(0.1);
+          solutionDoc.rect(x, y, cellSize, cellSize, "S");
+          const fontSize = Math.max(5, Math.min(8, cellSize * 0.5));
+          solutionDoc.setFontSize(fontSize);
+          solutionDoc.setTextColor(0, 0, 0);
+          solutionDoc.text(puzzle.grid[r][c], x + cellSize / 2, y + cellSize / 2 + fontSize * 0.1, { align: "center", baseline: "middle" });
         }
       }
-
-      doc.save(`word-search-puzzle-${puzzleIdx + 1}.pdf`);
+      const puzzleBlob = puzzleDoc.output('blob');
+      const solutionBlob = solutionDoc.output('blob');
+      puzzlesZip.file(`puzzle-${puzzleIdx + 1}-${puzzle.theme || 'wordsearch'}.pdf`, puzzleBlob);
+      solutionsZip.file(`solution-${puzzleIdx + 1}-${puzzle.theme || 'wordsearch'}.pdf`, solutionBlob);
     }
+    const puzzlesZipBlob = await puzzlesZip.generateAsync({ type: 'blob' });
+    const puzzlesLink = document.createElement('a');
+    puzzlesLink.href = URL.createObjectURL(puzzlesZipBlob);
+    puzzlesLink.download = `word-search-puzzles-${Date.now()}.zip`;
+    puzzlesLink.click();
+    URL.revokeObjectURL(puzzlesLink.href);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const solutionsZipBlob = await solutionsZip.generateAsync({ type: 'blob' });
+    const solutionsLink = document.createElement('a');
+    solutionsLink.href = URL.createObjectURL(solutionsZipBlob);
+    solutionsLink.download = `word-search-solutions-${Date.now()}.zip`;
+    solutionsLink.click();
+    URL.revokeObjectURL(solutionsLink.href);
   };
 
   const downloadPNGs = async () => {
     for (let puzzleIdx = 0; puzzleIdx < generatedPuzzles.length; puzzleIdx++) {
       const puzzle = generatedPuzzles[puzzleIdx];
-      
-      // Create puzzle image
       const puzzleDiv = document.createElement('div');
-      puzzleDiv.style.cssText = 'background: white; padding: 20px; width: 600px;';
-      
+      puzzleDiv.style.cssText = 'background: white; padding: 20px; width: 800px;';
       const titleP = document.createElement('h2');
-      titleP.textContent = 'Word Search Puzzle';
+      titleP.textContent = puzzle.theme || 'Word Search Puzzle';
       titleP.style.textAlign = 'center';
       puzzleDiv.appendChild(titleP);
-      
       const gridDiv = createGridDiv(puzzle.grid, null);
       puzzleDiv.appendChild(gridDiv);
-      
       const wordListDiv = document.createElement('div');
-      wordListDiv.style.cssText = 'margin-top: 20px; columns: 2;';
+      wordListDiv.style.cssText = 'margin-top: 20px; columns: 3;';
       puzzle.words.forEach(word => {
         const p = document.createElement('p');
         p.textContent = word;
@@ -246,7 +240,6 @@ const WordSearchCreator = () => {
         wordListDiv.appendChild(p);
       });
       puzzleDiv.appendChild(wordListDiv);
-      
       document.body.appendChild(puzzleDiv);
       const canvas = await html2canvas(puzzleDiv);
       const link = document.createElement('a');
@@ -254,19 +247,15 @@ const WordSearchCreator = () => {
       link.download = `word-search-puzzle-${puzzleIdx + 1}.png`;
       link.click();
       document.body.removeChild(puzzleDiv);
-      
-      // Create solution image
       const solutionDiv = document.createElement('div');
-      solutionDiv.style.cssText = 'background: white; padding: 20px; width: 600px;';
-      
+      solutionDiv.style.cssText = 'background: white; padding: 20px; width: 800px;';
       const titleS = document.createElement('h2');
-      titleS.textContent = 'Word Search - Solution';
+      titleS.textContent = `${puzzle.theme || 'Word Search'} - Solution`;
       titleS.style.textAlign = 'center';
       solutionDiv.appendChild(titleS);
-      
-      const gridDivSol = createGridDiv(puzzle.grid, puzzle.wordPositions);
+      const gridDivSol = createGridDiv(puzzle.grid, puzzle.wordPosit
+ions);
       solutionDiv.appendChild(gridDivSol);
-      
       document.body.appendChild(solutionDiv);
       const canvasSol = await html2canvas(solutionDiv);
       const linkSol = document.createElement('a');
@@ -280,10 +269,8 @@ const WordSearchCreator = () => {
   const createGridDiv = (grid, wordPositions) => {
     const gridDiv = document.createElement('div');
     gridDiv.style.cssText = 'display: inline-block; border: 2px solid black;';
-    
     const cellSize = 30;
     const highlightedCells = new Set();
-    
     if (wordPositions) {
       wordPositions.forEach(wp => {
         wp.positions.forEach(pos => {
@@ -291,31 +278,18 @@ const WordSearchCreator = () => {
         });
       });
     }
-    
     for (let r = 0; r < grid.length; r++) {
       const rowDiv = document.createElement('div');
       rowDiv.style.cssText = 'display: flex;';
-      
       for (let c = 0; c < grid[r].length; c++) {
         const cellDiv = document.createElement('div');
         const isHighlighted = highlightedCells.has(`${r},${c}`);
-        cellDiv.style.cssText = `
-          width: ${cellSize}px;
-          height: ${cellSize}px;
-          border: 1px solid black;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: bold;
-          background-color: ${isHighlighted ? 'yellow' : 'white'};
-        `;
+        cellDiv.style.cssText = `width: ${cellSize}px; height: ${cellSize}px; border: 1px solid black; display: flex; align-items: center; justify-content: center; font-weight: bold; background-color: ${isHighlighted ? 'yellow' : 'white'};`;
         cellDiv.textContent = grid[r][c];
         rowDiv.appendChild(cellDiv);
       }
-      
       gridDiv.appendChild(rowDiv);
     }
-    
     return gridDiv;
   };
 
@@ -324,53 +298,33 @@ const WordSearchCreator = () => {
       <header style={styles.header}>
         <h1 style={styles.title}>📄 Word Search Creator PRO</h1>
       </header>
-
       <div style={styles.tabBar}>
-        <button
-          style={{
-            ...styles.tabButton,
-            backgroundColor: currentTab === 'upload' ? '#00bcd4' : '#555',
-          }}
-          onClick={() => setCurrentTab('upload')}
-        >
+        <button style={{...styles.tabButton, backgroundColor: currentTab === 'upload' ? '#00bcd4' : '#555'}} onClick={() => setCurrentTab('upload')}>
           Upload & Generate
         </button>
-        <button
-          style={{
-            ...styles.tabButton,
-            backgroundColor: currentTab === 'custom' ? '#00bcd4' : '#555',
-          }}
-          onClick={() => setCurrentTab('custom')}
-        >
+        <button style={{...styles.tabButton, backgroundColor: currentTab === 'custom' ? '#00bcd4' : '#555'}} onClick={() => setCurrentTab('custom')}>
           Generate Custom Lists
         </button>
-        <button
-          style={{
-            ...styles.tabButton,
-            backgroundColor: currentTab === 'templates' ? '#00bcd4' : '#555',
-          }}
-          onClick={() => setCurrentTab('templates')}
-        >
+        <button style={{...styles.tabButton, backgroundColor: currentTab === 'templates' ? '#00bcd4' : '#555'}} onClick={() => setCurrentTab('templates')}>
           Quick Templates
         </button>
       </div>
-
       <div style={styles.content}>
         {currentTab === 'upload' && (
           <div>
             <h2>Upload Files & Generate</h2>
             <p>Upload TXT or ZIP files:</p>
             <input type="file" accept=".txt,.zip" onChange={handleFileUpload} />
-            
+            <br />
             <div style={styles.formGroup}>
               <label>Grid Size:</label>
               <select value={gridSize} onChange={(e) => setGridSize(Number(e.target.value))}>
-                <option value={10}>10x10</option>
                 <option value={15}>15x15</option>
                 <option value={20}>20x20</option>
+                <option value={25}>25x25</option>
               </select>
             </div>
-            
+            <br />
             <div style={styles.formGroup}>
               <label>Page Format:</label>
               <select value={pageFormat} onChange={(e) => setPageFormat(e.target.value)}>
@@ -379,18 +333,22 @@ const WordSearchCreator = () => {
                 <option value="US Letter">US Letter</option>
               </select>
             </div>
-            
+            <br />
+            <div style={styles.formGroup}>
+              <label>Puzzles per page:</label>
+              <select value={puzzlesPerPage} onChange={(e) => setPuzzlesPerPage(Number(e.target.value))}>
+                <option value={1}>1 per page</option>
+                <option value={2}>2 per page</option>
+              </select>
+            </div>
+            <br />
             <div style={styles.formGroup}>
               <label>
-                <input
-                  type="checkbox"
-                  checked={enableDecorations}
-                  onChange={(e) => setEnableDecorations(e.target.checked)}
-                />
+                <input type="checkbox" checked={enableDecorations} onChange={(e) => setEnableDecorations(e.target.checked)} />
                 Enable Decorations
               </label>
             </div>
-            
+            <br />
             <button style={styles.generateButton} onClick={() => downloadPDFs()}>
               Download PDFs
             </button>
@@ -399,14 +357,12 @@ const WordSearchCreator = () => {
             </button>
           </div>
         )}
-
         {currentTab === 'custom' && (
           <div>
             <h2>Generate Custom Lists</h2>
             <p>Feature coming soon! Create custom word lists for your puzzles.</p>
           </div>
         )}
-
         {currentTab === 'templates' && (
           <div>
             <h2>Quick Templates</h2>
